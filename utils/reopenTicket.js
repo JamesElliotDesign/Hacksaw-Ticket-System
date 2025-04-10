@@ -1,5 +1,10 @@
 const config = require('../config');
-const { PermissionsBitField } = require('discord.js');
+const {
+  PermissionsBitField,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require('discord.js');
 
 module.exports = {
   async reopenTicket(interaction) {
@@ -38,5 +43,19 @@ module.exports = {
     });
 
     await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
+
+    // Send fresh "Close Ticket" button
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('close_ticket')
+        .setLabel('Close Ticket')
+        .setEmoji('<:lock:1359919107599896766>')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await channel.send({
+      content: 'You may close this ticket again when resolved:',
+      components: [row]
+    });
   }
 };

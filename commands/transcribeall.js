@@ -8,7 +8,6 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   async execute(interaction) {
-    // Use flags instead of deprecated `ephemeral`
     await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
 
     const guild = interaction.guild;
@@ -16,11 +15,19 @@ module.exports = {
     const closedChannels = guild.channels.cache.filter(ch => ch.name.startsWith('closed-'));
 
     if (!logChannel) {
-      return await interaction.editReply('❌ Transcribe channel not found.');
+      try {
+        return await interaction.editReply('❌ Transcribe channel not found.');
+      } catch {
+        return await interaction.followUp({ content: '❌ Transcribe channel not found.', ephemeral: true });
+      }
     }
 
     if (closedChannels.size === 0) {
-      return await interaction.editReply('✅ No closed tickets to process.');
+      try {
+        return await interaction.editReply('✅ No closed tickets to process.');
+      } catch {
+        return await interaction.followUp({ content: '✅ No closed tickets to process.', ephemeral: true });
+      }
     }
 
     let processed = 0;
@@ -51,6 +58,10 @@ module.exports = {
       }
     }
 
-    await interaction.editReply(`✅ Finished processing ${processed} ticket(s).`);
+    try {
+      await interaction.editReply(`✅ Finished processing ${processed} ticket(s).`);
+    } catch {
+      await interaction.followUp({ content: `✅ Finished processing ${processed} ticket(s).`, ephemeral: true });
+    }
   }
 };
