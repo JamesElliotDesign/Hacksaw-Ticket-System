@@ -17,14 +17,14 @@ module.exports = {
     const name = `ticket-${type}-${user.username.toLowerCase()}`;
 
     // Check if user already has a ticket of this type open
-    const existing = guild.channels.cache.find(
-      ch => ch.name === name
-    );
+    const existing = guild.channels.cache.find(ch => ch.name === name);
     if (existing) {
-      await interaction.reply({
-        content: `You already have an open ${type} ticket: ${existing}`,
-        ephemeral: true
-      });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: `You already have an open ${type} ticket: ${existing}`,
+          ephemeral: true
+        });
+      }
       return;
     }
 
@@ -82,9 +82,13 @@ module.exports = {
       components: [closeRow]
     });
 
-    await interaction.reply({
-      content: `Ticket created: ${channel}`,
-      ephemeral: true
-    });
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: `Ticket created: ${channel}`,
+        ephemeral: true
+      });
+    }
+
+    return channel;
   }
 };

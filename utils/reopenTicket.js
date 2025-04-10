@@ -24,7 +24,6 @@ module.exports = {
     const parts = channel.name.split('-'); // closed-type-username
     const type = parts[1];
     const username = parts.slice(2).join('-');
-
     const name = `ticket-${type}-${username}`;
 
     const member = interaction.guild.members.cache.find(
