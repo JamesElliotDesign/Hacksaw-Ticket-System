@@ -1,11 +1,5 @@
 const config = require('../config');
-const {
-  PermissionsBitField,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder
-} = require('discord.js');
+const { createTicketChannel } = require('./createTicketChannel');
 
 module.exports = {
   async reopenTicket(interaction) {
@@ -18,13 +12,13 @@ module.exports = {
       });
     }
 
-    // Defer interaction early to prevent it from expiring
+    // Defer the interaction to prevent expiration
     await interaction.deferReply({ ephemeral: true });
 
-    const parts = channel.name.split('-'); // closed-type-username
+    // Parse ticket info from channel name: closed-comp-username
+    const parts = channel.name.split('-');
     const type = parts[1];
     const username = parts.slice(2).join('-');
-    const name = `ticket-${type}-${username}`;
 
     const member = interaction.guild.members.cache.find(
       m => m.user.username.toLowerCase() === username
@@ -36,70 +30,25 @@ module.exports = {
       });
     }
 
-    // Rename and move the channel
-    await channel.setName(name);
-    await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
+    // Delete the old closed ticket channel
+    await channel.delete().catch(() => null);
 
-    // Reset permissions
-    await channel.permissionOverwrites.set([
-      {
-        id: interaction.guild.roles.everyone,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: member.id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory
-        ]
-      },
-      ...config.supportRoleIds.map(roleId => ({
-        id: roleId,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory,
-          PermissionsBitField.Flags.ManageChannels
-        ]
-      }))
-    ]);
+    // Use a dummy interaction to create a new ticket with original user
+    const fakeInteraction = {
+      guild: interaction.guild,
+      user: member.user,
+      replied: true,
+      deferred: true,
+      reply: async () => {}
+    };
 
-    // Delete all old bot messages with buttons
-    const messages = await channel.messages.fetch({ limit: 50 });
-    const botMessages = messages.filter(
-      m => m.author.id === interaction.client.user.id && m.components.length > 0
-    );
-    for (const [, msg] of botMessages) {
-      await msg.delete().catch(() => null);
-    }
+    const newChannel = await createTicketChannel(fakeInteraction, type);
 
-    // Send new ticket UI
-    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
-    const embed = new EmbedBuilder()
-      .setTitle(`Support Ticket – ${capitalizedType}`)
-      .setDescription('This ticket has been reopened. A member of our support team will be with you shortly.\n\nUse the button below to manage your ticket.')
-      .setColor(0xe1501b);
-
-    const supportMentions = config.supportRoleIds.map(id => `<@&${id}>`).join(' ');
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('close_ticket')
-        .setLabel('Close Ticket')
-        .setEmoji('<:lock:1359919107599896766>')
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    await channel.send({
-      content: `<@${member.id}> ${supportMentions}`,
-      embeds: [embed],
-      components: [row]
-    });
+    // Send reference and notification in new ticket
+    await newChannel.send(`🔁 This ticket was reopened by <@${interaction.user.id}>.\n🗃️ Previous ticket was archived.`);
 
     await interaction.editReply({
-      content: '✅ Ticket has been successfully reopened and reset.'
+      content: `✅ A new ticket has been created for <@${member.id}> in <#${newChannel.id}>.`
     });
-
-    await channel.send(`🔁 Ticket reopened by <@${interaction.user.id}>.`);
   }
 };
