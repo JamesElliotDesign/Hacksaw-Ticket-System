@@ -8,24 +8,37 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   async execute(interaction) {
-    // Use flags instead of deprecated `ephemeral`
-    await interaction.deferReply({ flags: 64 }); // 64 = ephemeral
+    await interaction.deferReply({ flags: 64 }); // ephemeral
 
     const guild = interaction.guild;
     const logChannel = guild.channels.cache.get(config.transcribeChannelId);
-    const closedChannels = guild.channels.cache.filter(ch => ch.name.startsWith('closed-'));
+    const closedCategoryId = '1359691252886540670'; // Your Closed Tickets Category
 
     if (!logChannel) {
       return await interaction.editReply('❌ Transcribe channel not found.');
     }
+
+    // Only channels under the closed category
+    const closedChannels = guild.channels.cache.filter(
+      ch => ch.parentId === closedCategoryId && ch.type === 0 // text channels only
+    );
 
     if (closedChannels.size === 0) {
       return await interaction.editReply('✅ No closed tickets to process.');
     }
 
     let processed = 0;
+    let skipped = 0;
+
     for (const [, channel] of closedChannels) {
       try {
+        const perms = channel.permissionsFor(guild.members.me);
+        if (!perms.has(['ViewChannel', 'ReadMessageHistory'])) {
+          console.warn(`⚠️ Skipping ${channel.name} — missing permissions`);
+          skipped++;
+          continue;
+        }
+
         const messages = await channel.messages.fetch({ limit: 100 });
         const sorted = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
@@ -47,10 +60,13 @@ module.exports = {
         await channel.delete();
         processed++;
       } catch (err) {
-        console.error(`Error processing channel ${channel.name}:`, err);
+        console.error(`❌ Error processing ${channel.name}:`, err);
+        skipped++;
       }
     }
 
-    await interaction.editReply(`✅ Finished processing ${processed} ticket(s).`);
+    await interaction.editReply(
+      `✅ Transcribed and deleted ${processed} ticket(s).\n${skipped > 0 ? `⚠️ Skipped ${skipped} channel(s) due to errors or permissions.` : ''}`
+    );
   }
 };
