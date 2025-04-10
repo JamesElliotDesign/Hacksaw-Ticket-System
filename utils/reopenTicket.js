@@ -3,68 +3,103 @@ const {
   PermissionsBitField,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  EmbedBuilder
 } = require('discord.js');
 
 module.exports = {
   async reopenTicket(interaction) {
     const channel = interaction.channel;
-    const name = channel.name.replace('closed-', 'ticket-');
 
     if (!channel.name.startsWith('closed-')) {
-      await interaction.reply({
+      return interaction.reply({
         content: 'This is not a closed ticket channel.',
         ephemeral: true
       });
-      return;
     }
 
-    // Rename and move back to main category
-    await channel.setName(name);
-    await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
+    const parts = channel.name.split('-'); // closed-type-username
+    const type = parts[1];
+    const username = parts.slice(2).join('-');
 
-    // Restore user access
-    const userMention = name.split('-').slice(2).join('-'); // remove 'ticket-type-'
+    const name = `ticket-${type}-${username}`;
+
     const member = interaction.guild.members.cache.find(
-      m => m.user.username.toLowerCase() === userMention
+      m => m.user.username.toLowerCase() === username
     );
 
-    if (member) {
-      await channel.permissionOverwrites.edit(member.id, {
-        ViewChannel: true,
-        SendMessages: true,
-        ReadMessageHistory: true
+    if (!member) {
+      return interaction.reply({
+        content: `Could not find user \`${username}\`.`,
+        ephemeral: true
       });
     }
 
-    await interaction.reply({
-      content: 'Ticket has been reopened.',
-      ephemeral: true
-    });
+    // Rename and move the channel
+    await channel.setName(name);
+    await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
 
-    await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
+    // Reset permissions
+    await channel.permissionOverwrites.set([
+      {
+        id: interaction.guild.roles.everyone,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: member.id,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.SendMessages,
+          PermissionsBitField.Flags.ReadMessageHistory
+        ]
+      },
+      ...config.supportRoleIds.map(roleId => ({
+        id: roleId,
+        allow: [
+          PermissionsBitField.Flags.ViewChannel,
+          PermissionsBitField.Flags.SendMessages,
+          PermissionsBitField.Flags.ReadMessageHistory,
+          PermissionsBitField.Flags.ManageChannels
+        ]
+      }))
+    ]);
 
-    // 🔁 Clean up old button messages sent by the bot
-    const messages = await channel.messages.fetch({ limit: 50 }); // scan last 50
-    const botMessagesWithButtons = messages.filter(
+    // Delete all old bot messages with buttons
+    const messages = await channel.messages.fetch({ limit: 50 });
+    const botMessages = messages.filter(
       m => m.author.id === interaction.client.user.id && m.components.length > 0
     );
-
-    for (const [, msg] of botMessagesWithButtons) {
-      await msg.delete().catch(() => null); // ignore if already deleted
+    for (const [, msg] of botMessages) {
+      await msg.delete().catch(() => null);
     }
 
-    // ✅ Send fresh button row (without Transcribe & Delete)
+    // Send new ticket UI
+    const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
+    const embed = new EmbedBuilder()
+      .setTitle(`Support Ticket – ${capitalizedType}`)
+      .setDescription('This ticket has been reopened. A member of our support team will be with you shortly.\n\nUse the button below to manage your ticket.')
+      .setColor(0xe1501b);
+
+    const supportMentions = config.supportRoleIds.map(id => `<@&${id}>`).join(' ');
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('close_ticket')
         .setLabel('Close Ticket')
-        .setStyle(ButtonStyle.Danger)
+        .setEmoji('<:lock:1359919107599896766>')
+        .setStyle(ButtonStyle.Secondary)
     );
 
     await channel.send({
-      content: 'Support team: use the button below to close this ticket again if needed.',
+      content: `<@${member.id}> ${supportMentions}`,
+      embeds: [embed],
       components: [row]
     });
+
+    await interaction.reply({
+      content: '✅ Ticket has been successfully reopened and reset.',
+      ephemeral: true
+    });
+
+    await channel.send(`🔁 Ticket reopened by <@${interaction.user.id}>.`);
   }
 };
