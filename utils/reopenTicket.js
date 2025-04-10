@@ -12,10 +12,8 @@ module.exports = {
       });
     }
 
-    // Defer the interaction to prevent expiration
     await interaction.deferReply({ ephemeral: true });
 
-    // Parse ticket info from channel name: closed-comp-username
     const parts = channel.name.split('-');
     const type = parts[1];
     const username = parts.slice(2).join('-');
@@ -30,10 +28,18 @@ module.exports = {
       });
     }
 
-    // Delete the old closed ticket channel
+    // 📜 Fetch messages from the old ticket
+    const oldMessages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+
+    // ✅ Edit reply BEFORE deleting the old channel
+    await interaction.editReply({
+      content: `✅ A new ticket will be created for <@${member.id}> shortly...`
+    });
+
+    // ❌ Delete the closed ticket
     await channel.delete().catch(() => null);
 
-    // Use a dummy interaction to create a new ticket with original user
+    // 🔁 Fake interaction to reuse createTicketChannel()
     const fakeInteraction = {
       guild: interaction.guild,
       user: member.user,
@@ -44,11 +50,20 @@ module.exports = {
 
     const newChannel = await createTicketChannel(fakeInteraction, type);
 
-    // Send reference and notification in new ticket
-    await newChannel.send(`🔁 This ticket was reopened by <@${interaction.user.id}>.\n🗃️ Previous ticket was archived.`);
+    // 📨 Repost original messages (safe version)
+    if (oldMessages && oldMessages.size > 0) {
+      const sorted = [...oldMessages.values()]
+        .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+        .slice(0, 15); // Limit reposting to 15 messages
 
-    await interaction.editReply({
-      content: `✅ A new ticket has been created for <@${member.id}> in <#${newChannel.id}>.`
-    });
+      await newChannel.send(`🗃 Reopened ticket — here are recent messages from the original thread:\n`);
+
+      for (const msg of sorted) {
+        const content = msg.content || '[Embed/Attachment]';
+        await newChannel.send(`**${msg.author.tag}**: ${content}`).catch(() => {});
+      }
+    }
+
+    await newChannel.send(`🔁 Ticket reopened by <@${interaction.user.id}>.`);
   }
 };
