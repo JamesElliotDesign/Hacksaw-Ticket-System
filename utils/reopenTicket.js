@@ -1,85 +1,42 @@
 const config = require('../config');
-const { createTicketChannel } = require('./createTicketChannel');
+const { PermissionsBitField } = require('discord.js');
 
 module.exports = {
   async reopenTicket(interaction) {
-    const oldChannel = interaction.channel;
+    const channel = interaction.channel;
+    const name = channel.name.replace('closed-', 'ticket-');
 
-    if (!oldChannel.name.startsWith('closed-')) {
-      return await interaction.reply({
+    if (!channel.name.startsWith('closed-')) {
+      await interaction.reply({
         content: 'This is not a closed ticket channel.',
         ephemeral: true
       });
+      return;
     }
 
-    const parts = oldChannel.name.split('-');
-    const type = parts[1];
-    const userId = parts[parts.length - 1];
+    // Rename and move back to main category
+    await channel.setName(name);
+    await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
 
-    let user;
-    try {
-      user = await interaction.guild.members.fetch(userId);
-    } catch (err) {
-      return await interaction.reply({
-        content: `❌ Could not find the user for this ticket.`,
-        ephemeral: true
+    // Restore user access
+    const userMention = name.split('-').slice(2).join('-'); // remove 'ticket-type-'
+    const member = interaction.guild.members.cache.find(
+      m => m.user.username.toLowerCase() === userMention
+    );
+
+    if (member) {
+      await channel.permissionOverwrites.edit(member.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        ReadMessageHistory: true
       });
     }
 
-    // Fetch recent messages (context)
-    let context = '';
-    try {
-      const messages = await oldChannel.messages.fetch({ limit: 25 });
-      const sorted = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
-
-      context = sorted.map(msg => {
-        const timestamp = new Date(msg.createdTimestamp).toLocaleString();
-        const author = `${msg.author.tag}`;
-        const content = msg.content || '[Embed/Attachment]';
-        return `[${timestamp}] ${author}: ${content}`;
-      }).join('\n');
-    } catch {
-      context = '⚠️ Could not fetch previous messages.';
-    }
-
-    // Recreate ticket
-    const fakeInteraction = {
-      guild: interaction.guild,
-      user: user.user,
-      reply: async () => {},
-    };
-
-    const newChannel = await createTicketChannel(fakeInteraction, type, userId);
-
-    if (!newChannel) {
-      return await interaction.reply({
-        content: '❌ Failed to recreate the ticket channel.',
-        ephemeral: true
-      });
-    }
-
-    // Send context to the new ticket
-    await newChannel.send({
-      content: `Ticket was reopened by <@${interaction.user.id}> from <#${oldChannel.id}>.`,
-    });
-
-    if (context) {
-      await newChannel.send({
-        files: [{
-          attachment: Buffer.from(context),
-          name: `previous-transcript.txt`
-        }]
-      });
-    }
-
-    // Delete old closed ticket
-    await oldChannel.delete().catch(err => {
-      console.warn(`⚠️ Failed to delete closed ticket:`, err.message);
-    });
-
-    return await interaction.reply({
-      content: `✅ Reopened the ticket in ${newChannel}.`,
+    await interaction.reply({
+      content: 'Ticket has been reopened.',
       ephemeral: true
     });
+
+    await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
   }
 };

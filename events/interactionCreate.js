@@ -9,7 +9,6 @@ module.exports = {
   async execute(interaction) {
     // Handle buttons
     if (interaction.isButton()) {
-      console.log('🔘 Button Pressed:', interaction.customId);
       if (interaction.customId.startsWith('create_ticket_')) {
         const type = interaction.customId.replace('create_ticket_', '');
         await createTicketChannel(interaction, type);
@@ -26,6 +25,7 @@ module.exports = {
       if (interaction.customId === 'reopen_ticket') {
         await reopenTicket(interaction);
       }
+      
     }    
 
     // Handle slash commands

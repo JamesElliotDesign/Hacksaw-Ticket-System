@@ -9,37 +9,28 @@ const {
 const config = require('../config');
 
 module.exports = {
-  async createTicketChannel(interaction, type = 'general', overrideUserId = null) {
+  async createTicketChannel(interaction, type = 'general') {
     const guild = interaction.guild;
-    const user = overrideUserId
-      ? await guild.members.fetch(overrideUserId).then(m => m.user).catch(() => null)
-      : interaction.user;
+    const user = interaction.user;
 
-    if (!user) {
-      console.warn(`❌ Could not fetch user for ticket creation.`);
-      if (interaction.reply) {
-        await interaction.reply({
-          content: 'Could not fetch user.',
-          ephemeral: true
-        });
-      }
-      return null;
-    }
+    // Generate dynamic channel name
+    const name = `ticket-${type}-${user.username.toLowerCase()}`;
 
-    const channelName = `ticket-${type}-${user.username.toLowerCase()}-${user.id}`;
-
-    // Check if this ticket already exists
-    const existing = guild.channels.cache.find(ch => ch.name === channelName);
-    if (existing && interaction.reply) {
+    // Check if user already has a ticket of this type open
+    const existing = guild.channels.cache.find(
+      ch => ch.name === name
+    );
+    if (existing) {
       await interaction.reply({
         content: `You already have an open ${type} ticket: ${existing}`,
         ephemeral: true
       });
-      return null;
+      return;
     }
 
+    // Create the ticket channel
     const channel = await guild.channels.create({
-      name: channelName,
+      name: name,
       type: ChannelType.GuildText,
       parent: config.ticketCategoryId,
       permissionOverwrites: [
@@ -67,6 +58,7 @@ module.exports = {
       ]
     });
 
+    // Format title based on type (capitalize first letter)
     const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
 
     const embed = new EmbedBuilder()
@@ -90,13 +82,9 @@ module.exports = {
       components: [closeRow]
     });
 
-    if (interaction.reply) {
-      await interaction.reply({
-        content: `Ticket created: ${channel}`,
-        ephemeral: true
-      });
-    }
-
-    return channel;
+    await interaction.reply({
+      content: `Ticket created: ${channel}`,
+      ephemeral: true
+    });
   }
 };
