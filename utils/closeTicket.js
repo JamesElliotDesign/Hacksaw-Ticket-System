@@ -9,7 +9,7 @@ const config = require('../config');
 module.exports = {
   async closeTicket(interaction) {
     try {
-      const channel = interaction.channel;
+      const channel = await interaction.guild.channels.fetch(interaction.channelId);
 
       if (!channel.name.startsWith('ticket-')) {
         console.warn('⛔ Not a ticket channel:', channel.name);
