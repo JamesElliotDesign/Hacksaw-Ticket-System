@@ -1,5 +1,10 @@
 const config = require('../config');
-const { PermissionsBitField } = require('discord.js');
+const {
+  PermissionsBitField,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require('discord.js');
 
 module.exports = {
   async reopenTicket(interaction) {
@@ -38,5 +43,28 @@ module.exports = {
     });
 
     await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
+
+    // 🔁 Clean up old button messages sent by the bot
+    const messages = await channel.messages.fetch({ limit: 50 }); // scan last 50
+    const botMessagesWithButtons = messages.filter(
+      m => m.author.id === interaction.client.user.id && m.components.length > 0
+    );
+
+    for (const [, msg] of botMessagesWithButtons) {
+      await msg.delete().catch(() => null); // ignore if already deleted
+    }
+
+    // ✅ Send fresh button row (without Transcribe & Delete)
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('close_ticket')
+        .setLabel('Close Ticket')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await channel.send({
+      content: 'Support team: use the button below to close this ticket again if needed.',
+      components: [row]
+    });
   }
 };
