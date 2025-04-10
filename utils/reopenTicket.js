@@ -1,77 +1,85 @@
 const config = require('../config');
-const {
-  PermissionsBitField,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
-} = require('discord.js');
+const { createTicketChannel } = require('./createTicketChannel');
 
 module.exports = {
   async reopenTicket(interaction) {
-    const channel = interaction.channel;
+    const oldChannel = interaction.channel;
 
-    if (!channel.name.startsWith('closed-')) {
-      await interaction.reply({
+    if (!oldChannel.name.startsWith('closed-')) {
+      return await interaction.reply({
         content: 'This is not a closed ticket channel.',
         ephemeral: true
       });
-      return;
     }
 
-    // Rename channel from closed- to ticket-
-    const name = channel.name.replace('closed-', 'ticket-');
-    await channel.setName(name);
-    await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
-
-    // Extract user ID from the last part of the channel name
-    const parts = name.split('-');
+    const parts = oldChannel.name.split('-');
+    const type = parts[1];
     const userId = parts[parts.length - 1];
 
-    let member;
+    let user;
     try {
-      member = await interaction.guild.members.fetch(userId);
-    } catch {
-      member = null;
-    }
-
-    if (member) {
-      await channel.permissionOverwrites.edit(member.id, {
-        ViewChannel: true,
-        SendMessages: true,
-        ReadMessageHistory: true
+      user = await interaction.guild.members.fetch(userId);
+    } catch (err) {
+      return await interaction.reply({
+        content: `❌ Could not find the user for this ticket.`,
+        ephemeral: true
       });
     }
 
-    await interaction.reply({
-      content: 'Ticket has been reopened.',
-      ephemeral: true
-    });
-
-    await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
-
-    // 🧼 Delete old button messages to prevent expired interaction errors
+    // Fetch recent messages (context)
+    let context = '';
     try {
-      const messages = await channel.messages.fetch({ limit: 10 });
-      const buttonMessages = messages.filter(m => m.components?.length > 0);
-      for (const [, msg] of buttonMessages) {
-        await msg.delete().catch(() => {});
-      }
-    } catch (err) {
-      console.warn('Could not delete old button messages:', err.message);
+      const messages = await oldChannel.messages.fetch({ limit: 25 });
+      const sorted = messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+      context = sorted.map(msg => {
+        const timestamp = new Date(msg.createdTimestamp).toLocaleString();
+        const author = `${msg.author.tag}`;
+        const content = msg.content || '[Embed/Attachment]';
+        return `[${timestamp}] ${author}: ${content}`;
+      }).join('\n');
+    } catch {
+      context = '⚠️ Could not fetch previous messages.';
     }
 
-    // ✅ Send a fresh Close Ticket button
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('close_ticket')
-        .setLabel('Close Ticket')
-        .setEmoji('<:lock:1359919107599896766>')
-        .setStyle(ButtonStyle.Secondary)
-    );
+    // Recreate ticket
+    const fakeInteraction = {
+      guild: interaction.guild,
+      user: user.user,
+      reply: async () => {},
+    };
 
-    await channel.send({
-      content: 'You may close this ticket again when resolved:',
-      components: [row]
+    const newChannel = await createTicketChannel(fakeInteraction, type, userId);
+
+    if (!newChannel) {
+      return await interaction.reply({
+        content: '❌ Failed to recreate the ticket channel.',
+        ephemeral: true
+      });
+    }
+
+    // Send context to the new ticket
+    await newChannel.send({
+      content: `Ticket was reopened by <@${interaction.user.id}> from <#${oldChannel.id}>.`,
+    });
+
+    if (context) {
+      await newChannel.send({
+        files: [{
+          attachment: Buffer.from(context),
+          name: `previous-transcript.txt`
+        }]
+      });
+    }
+
+    // Delete old closed ticket
+    await oldChannel.delete().catch(err => {
+      console.warn(`⚠️ Failed to delete closed ticket:`, err.message);
+    });
+
+    return await interaction.reply({
+      content: `✅ Reopened the ticket in ${newChannel}.`,
+      ephemeral: true
     });
   }
 };

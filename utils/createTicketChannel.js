@@ -9,25 +9,37 @@ const {
 const config = require('../config');
 
 module.exports = {
-  async createTicketChannel(interaction, type = 'general') {
+  async createTicketChannel(interaction, type = 'general', overrideUserId = null) {
     const guild = interaction.guild;
-    const user = interaction.user;
+    const user = overrideUserId
+      ? await guild.members.fetch(overrideUserId).then(m => m.user).catch(() => null)
+      : interaction.user;
 
-    // Updated name format includes user ID
-    const name = `ticket-${type}-${user.username.toLowerCase()}-${user.id}`;
+    if (!user) {
+      console.warn(`❌ Could not fetch user for ticket creation.`);
+      if (interaction.reply) {
+        await interaction.reply({
+          content: 'Could not fetch user.',
+          ephemeral: true
+        });
+      }
+      return null;
+    }
 
-    // Check if user already has a ticket of this type open
-    const existing = guild.channels.cache.find(ch => ch.name === name);
-    if (existing) {
+    const channelName = `ticket-${type}-${user.username.toLowerCase()}-${user.id}`;
+
+    // Check if this ticket already exists
+    const existing = guild.channels.cache.find(ch => ch.name === channelName);
+    if (existing && interaction.reply) {
       await interaction.reply({
         content: `You already have an open ${type} ticket: ${existing}`,
         ephemeral: true
       });
-      return;
+      return null;
     }
 
     const channel = await guild.channels.create({
-      name,
+      name: channelName,
       type: ChannelType.GuildText,
       parent: config.ticketCategoryId,
       permissionOverwrites: [
@@ -78,9 +90,13 @@ module.exports = {
       components: [closeRow]
     });
 
-    await interaction.reply({
-      content: `Ticket created: ${channel}`,
-      ephemeral: true
-    });
+    if (interaction.reply) {
+      await interaction.reply({
+        content: `Ticket created: ${channel}`,
+        ephemeral: true
+      });
+    }
+
+    return channel;
   }
 };
