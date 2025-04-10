@@ -30,8 +30,11 @@ module.exports = {
 
     const logChannel = interaction.guild.channels.cache.get(config.transcribeChannelId);
     if (logChannel) {
+      // Optional: extract user ID to tag or log who owned the ticket
+      const userId = channel.name.split('-').pop();
+
       await logChannel.send({
-        content: `📝 Transcript from ${channel.name}`,
+        content: `📝 Transcript from ${channel.name} (opened by <@${userId}>)`,
         files: [attachment]
       });
     }

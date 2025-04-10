@@ -13,13 +13,11 @@ module.exports = {
     const guild = interaction.guild;
     const user = interaction.user;
 
-    // Generate dynamic channel name
-    const name = `ticket-${type}-${user.username.toLowerCase()}`;
+    // Updated name format includes user ID
+    const name = `ticket-${type}-${user.username.toLowerCase()}-${user.id}`;
 
     // Check if user already has a ticket of this type open
-    const existing = guild.channels.cache.find(
-      ch => ch.name === name
-    );
+    const existing = guild.channels.cache.find(ch => ch.name === name);
     if (existing) {
       await interaction.reply({
         content: `You already have an open ${type} ticket: ${existing}`,
@@ -28,9 +26,8 @@ module.exports = {
       return;
     }
 
-    // Create the ticket channel
     const channel = await guild.channels.create({
-      name: name,
+      name,
       type: ChannelType.GuildText,
       parent: config.ticketCategoryId,
       permissionOverwrites: [
@@ -58,7 +55,6 @@ module.exports = {
       ]
     });
 
-    // Format title based on type (capitalize first letter)
     const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
 
     const embed = new EmbedBuilder()

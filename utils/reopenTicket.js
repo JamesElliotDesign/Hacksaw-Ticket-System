@@ -9,7 +9,6 @@ const {
 module.exports = {
   async reopenTicket(interaction) {
     const channel = interaction.channel;
-    const name = channel.name.replace('closed-', 'ticket-');
 
     if (!channel.name.startsWith('closed-')) {
       await interaction.reply({
@@ -19,15 +18,21 @@ module.exports = {
       return;
     }
 
-    // Rename and move to ticket category
+    // Rename channel from closed- to ticket-
+    const name = channel.name.replace('closed-', 'ticket-');
     await channel.setName(name);
     await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
 
-    // Restore user access
-    const userMention = name.split('-').slice(2).join('-'); // handles ticket-type-username
-    const member = interaction.guild.members.cache.find(
-      m => m.user.username.toLowerCase() === userMention
-    );
+    // Extract user ID from the last part of the channel name
+    const parts = name.split('-');
+    const userId = parts[parts.length - 1];
+
+    let member;
+    try {
+      member = await interaction.guild.members.fetch(userId);
+    } catch {
+      member = null;
+    }
 
     if (member) {
       await channel.permissionOverwrites.edit(member.id, {
@@ -38,13 +43,13 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: 'Ticket has been reopened.',
+      content: '✅ Ticket has been reopened.',
       ephemeral: true
     });
 
-    await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
+    await channel.send(`🟢 Ticket reopened by <@${interaction.user.id}>.`);
 
-    // 🧼 Delete old messages with buttons to prevent expired interactions
+    // 🧼 Delete old button messages to prevent expired interaction errors
     try {
       const messages = await channel.messages.fetch({ limit: 10 });
       const buttonMessages = messages.filter(m => m.components?.length > 0);
@@ -55,7 +60,7 @@ module.exports = {
       console.warn('Could not delete old button messages:', err.message);
     }
 
-    // ✅ Send fresh working "Close Ticket" button
+    // ✅ Send a fresh Close Ticket button
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('close_ticket')

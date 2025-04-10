@@ -18,24 +18,24 @@ module.exports = {
       return;
     }
 
-    // Safely extract username from channel name (last segment)
-    const parts = channel.name.split('-'); // e.g., ["ticket", "comp", "hacksaw"]
-    const userMention = parts[parts.length - 1];
+    const parts = channel.name.split('-');
+    const userId = parts[parts.length - 1];
 
-    // Rename to closed-username
-    await channel.setName(`closed-${userMention}`);
+    // Rename channel to closed-type-username-userId
+    const nameWithoutPrefix = parts.slice(1).join('-'); // remove 'ticket'
+    await channel.setName(`closed-${nameWithoutPrefix}`);
 
-    // Move to closed ticket category if set
     if (config.closedTicketCategoryId) {
       await channel.setParent(config.closedTicketCategoryId, { lockPermissions: false });
     }
 
-    // Try to find the user by username
-    const user = interaction.guild.members.cache.find(
-      m => m.user.username.toLowerCase() === userMention
-    );
+    let user;
+    try {
+      user = await interaction.guild.members.fetch(userId);
+    } catch {
+      user = null;
+    }
 
-    // Only remove access if they are not support staff
     const isSupport = user?.roles.cache.some(role =>
       config.supportRoleIds.includes(role.id)
     );
@@ -53,7 +53,6 @@ module.exports = {
 
     await channel.send(`Ticket closed by <@${interaction.user.id}>.`);
 
-    // Send support-only buttons
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('transcribe_delete')
