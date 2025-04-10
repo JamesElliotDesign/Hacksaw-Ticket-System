@@ -18,6 +18,9 @@ module.exports = {
       });
     }
 
+    // Defer interaction early to prevent it from expiring
+    await interaction.deferReply({ ephemeral: true });
+
     const parts = channel.name.split('-'); // closed-type-username
     const type = parts[1];
     const username = parts.slice(2).join('-');
@@ -29,9 +32,8 @@ module.exports = {
     );
 
     if (!member) {
-      return interaction.reply({
-        content: `Could not find user \`${username}\`.`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `Could not find user \`${username}\`.`
       });
     }
 
@@ -95,9 +97,8 @@ module.exports = {
       components: [row]
     });
 
-    await interaction.reply({
-      content: '✅ Ticket has been successfully reopened and reset.',
-      ephemeral: true
+    await interaction.editReply({
+      content: '✅ Ticket has been successfully reopened and reset.'
     });
 
     await channel.send(`🔁 Ticket reopened by <@${interaction.user.id}>.`);
