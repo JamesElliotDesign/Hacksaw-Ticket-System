@@ -1,9 +1,6 @@
 const config = require('../config');
 const {
-  PermissionsBitField,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
+  PermissionsBitField
 } = require('discord.js');
 
 module.exports = {
@@ -24,7 +21,7 @@ module.exports = {
     await channel.setParent(config.ticketCategoryId, { lockPermissions: false });
 
     // Restore user access
-    const userMention = name.split('-').slice(2).join('-'); // remove 'ticket-type-'
+    const userMention = name.split('-').slice(2).join('-'); // handles 'ticket-type-username'
     const member = interaction.guild.members.cache.find(
       m => m.user.username.toLowerCase() === userMention
     );
@@ -43,19 +40,5 @@ module.exports = {
     });
 
     await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
-
-    // Send fresh "Close Ticket" button
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('close_ticket')
-        .setLabel('Close Ticket')
-        .setEmoji('<:lock:1359919107599896766>')
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    await channel.send({
-      content: 'You may close this ticket again when resolved:',
-      components: [row]
-    });
   }
 };
