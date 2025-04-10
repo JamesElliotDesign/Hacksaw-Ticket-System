@@ -4,7 +4,7 @@ const {
     ButtonBuilder,
     ButtonStyle
   } = require('discord.js');
-  const config = require('../config.json');
+  const config = require('../config');
   
   module.exports = {
     async closeTicket(interaction) {
