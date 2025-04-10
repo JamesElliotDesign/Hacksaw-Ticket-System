@@ -43,11 +43,11 @@ module.exports = {
     }
 
     await interaction.reply({
-      content: '✅ Ticket has been reopened.',
+      content: 'Ticket has been reopened.',
       ephemeral: true
     });
 
-    await channel.send(`🟢 Ticket reopened by <@${interaction.user.id}>.`);
+    await channel.send(`Ticket reopened by <@${interaction.user.id}>.`);
 
     // 🧼 Delete old button messages to prevent expired interaction errors
     try {

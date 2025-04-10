@@ -51,10 +51,16 @@ module.exports = {
 
       console.log(`✅ Closing ticket for ${channel.name}`);
 
-      await interaction.reply({
-        content: `Ticket closed. Only support staff can now view this channel.`,
-        ephemeral: true
-      });
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({
+          content: `Ticket closed. Only support staff can now view this channel.`,
+        });
+      } else {
+        await interaction.reply({
+          content: `Ticket closed. Only support staff can now view this channel.`,
+          ephemeral: true
+        });
+      }
 
       await channel.send(`Ticket closed by <@${interaction.user.id}>.`);
 
